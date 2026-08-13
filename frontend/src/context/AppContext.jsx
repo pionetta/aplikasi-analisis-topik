@@ -9,7 +9,7 @@ export function AppProvider({ children }) {
   // Saat dev, fallback ke localhost Flask.
   const API_BASE_URL = import.meta.env.VITE_API_URL !== undefined
     ? import.meta.env.VITE_API_URL          // '' (production) atau 'http://...' (dev .env)
-    : 'http://127.0.0.1:5000';              // fallback jika VITE_API_URL tidak di-set sama sekali
+    : 'https://aplikasi-analisis-topik-production.up.railway.app';              // fallback jika VITE_API_URL tidak di-set sama sekali
 
   // ==========================================
   // STATE APLIKASI
