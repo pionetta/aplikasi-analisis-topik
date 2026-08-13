@@ -16,12 +16,7 @@ STATIC_FOLDER = os.path.join(os.path.dirname(__file__), '..', 'frontend', 'dist'
 app = Flask(__name__, static_folder=STATIC_FOLDER, static_url_path='/')
 
 # [KRITIKAL] CORS dibatasi hanya ke origin frontend yang dikenal (untuk mode dev)
-CORS(app, origins=[
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "http://localhost:7860",
-    "http://127.0.0.1:7860",
-])
+CORS(app, resources={r"/*": {"origins": "*"}})
 
 # [KEAMANAN] Batasi ukuran upload maksimal 50 MB
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50 MB
