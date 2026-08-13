@@ -8,19 +8,44 @@ TURSO_AUTH_TOKEN = os.environ.get('TURSO_AUTH_TOKEN')
 IS_TURSO = TURSO_DATABASE_URL is not None and TURSO_AUTH_TOKEN is not None
 
 if IS_TURSO:
-    import libsql_experimental as libsql
+    import libsql_client
 else:
     import sqlite3
 
 DB_PATH = os.environ.get('DATABASE_PATH', 'database.db')
 
+class TursoConnection:
+    def __init__(self, url, token):
+        self.client = libsql_client.create_client_sync(url, auth_token=token)
+    def cursor(self):
+        return TursoCursor(self.client)
+    def commit(self):
+        pass
+    def close(self):
+        self.client.close()
+
+class TursoCursor:
+    def __init__(self, client):
+        self.client = client
+        self.last_rs = None
+    def execute(self, sql, params=()):
+        # Convert tuple to list for libsql_client
+        self.last_rs = self.client.execute(sql, list(params))
+    def fetchone(self):
+        if self.last_rs and len(self.last_rs.rows) > 0:
+            return self.last_rs.rows[0]
+        return None
+    def fetchall(self):
+        if self.last_rs:
+            return self.last_rs.rows
+        return []
+
 def get_db_connection():
     if IS_TURSO:
-        # libsql-experimental requires url and auth_token
         url = TURSO_DATABASE_URL
         if not url.startswith("libsql://") and not url.startswith("https://"):
             url = f"libsql://{url}"
-        return libsql.connect(url, auth_token=TURSO_AUTH_TOKEN)
+        return TursoConnection(url, TURSO_AUTH_TOKEN)
     else:
         return sqlite3.connect(DB_PATH, timeout=30.0)
 

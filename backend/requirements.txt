@@ -7,4 +7,4 @@ pyLDAvis==3.4.1
 gensim==4.3.2
 scipy==1.12.0
 gunicorn==22.0.0
-libsql-experimental==0.0.42
+libsql-client
