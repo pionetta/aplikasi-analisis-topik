@@ -5,7 +5,7 @@ import gensim.corpora as corpora
 from flask import Blueprint, request, jsonify
 
 from services.session_service import load_session
-from services.db_service import get_db_connection, get_task, set_task
+from services.db_service import get_db_connection, get_task, set_task, save_movie_analysis
 from services.lda_service import _run_find_optimal_k, _build_lda_payload
 from auto_labeler import interpret_topic
 
@@ -105,14 +105,7 @@ def analyze():
         result_payload["ngram_mode"] = mode
 
         db_key = f"{title}_{mode}_k{num_topics}"
-        conn   = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            'INSERT OR REPLACE INTO movie_analysis (id_title, result_data) VALUES (?, ?)',
-            (db_key, json.dumps(result_payload))
-        )
-        conn.commit()
-        conn.close()
+        save_movie_analysis(db_key, result_payload)
 
         return jsonify({"status": "success", "data": result_payload})
     except Exception as e:

@@ -211,22 +211,13 @@ def _run_find_optimal_k(task_id, title, min_k, max_k, tokens_all, raw_texts):
         optimal_mode = best['mode']
 
         # Cache SEMUA model (Unigram, Bigram untuk K=2..10) ke Database agar tersedia di History
-        import sqlite3
-        import json
-        from services.db_service import DB_PATH
+        from services.db_service import save_movie_analysis
         try:
-            conn = sqlite3.connect(DB_PATH)
-            cursor = conn.cursor()
             for payload, mode, k in payloads:
                 db_key = f"{title}_{mode}_k{k}"
                 payload["ngram_mode"] = mode
                 payload["optimal_k_results"] = results
-                cursor.execute(
-                    'INSERT OR REPLACE INTO movie_analysis (id_title, result_data) VALUES (?, ?)',
-                    (db_key, json.dumps(payload))
-                )
-            conn.commit()
-            conn.close()
+                save_movie_analysis(db_key, payload)
         except Exception as e:
             print(f"Error caching to DB: {e}")
 
