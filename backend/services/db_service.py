@@ -1,23 +1,14 @@
 import os
 import json
+import sqlite3
 
-TURSO_DB_URL = os.environ.get('TURSO_DATABASE_URL')
-TURSO_AUTH_TOKEN = os.environ.get('TURSO_AUTH_TOKEN')
-
-if TURSO_DB_URL and TURSO_AUTH_TOKEN:
-    import libsql_experimental as sqlite3
-    DB_PATH = TURSO_DB_URL
-else:
-    import sqlite3
-    DB_PATH = 'database.db'
+# Jika dijalankan di Railway, gunakan path dari environment variable (misal: /app/data/database.db)
+# Jika lokal, gunakan 'database.db'
+DB_PATH = os.environ.get('DATABASE_PATH', 'database.db')
 
 def get_db_connection():
-    if TURSO_DB_URL and TURSO_AUTH_TOKEN:
-        # Turso remote connection
-        return sqlite3.connect(TURSO_DB_URL, auth_token=TURSO_AUTH_TOKEN)
-    else:
-        # Local SQLite fallback
-        return sqlite3.connect(DB_PATH, timeout=30.0)
+    # Local SQLite fallback
+    return sqlite3.connect(DB_PATH, timeout=30.0)
 
 def init_db():
     conn = get_db_connection()
