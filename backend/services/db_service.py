@@ -2,20 +2,25 @@ import os
 import json
 import datetime
 
-# Supabase Postgres URL
-DATABASE_URL = os.environ.get('DATABASE_URL')
-IS_POSTGRES = DATABASE_URL is not None and DATABASE_URL.startswith('postgres')
+# Turso DB Configuration
+TURSO_DATABASE_URL = os.environ.get('TURSO_DATABASE_URL')
+TURSO_AUTH_TOKEN = os.environ.get('TURSO_AUTH_TOKEN')
+IS_TURSO = TURSO_DATABASE_URL is not None and TURSO_AUTH_TOKEN is not None
 
-if IS_POSTGRES:
-    import psycopg2
+if IS_TURSO:
+    import libsql_experimental as libsql
 else:
     import sqlite3
 
 DB_PATH = os.environ.get('DATABASE_PATH', 'database.db')
 
 def get_db_connection():
-    if IS_POSTGRES:
-        return psycopg2.connect(DATABASE_URL)
+    if IS_TURSO:
+        # libsql-experimental requires url and auth_token
+        url = TURSO_DATABASE_URL
+        if not url.startswith("libsql://") and not url.startswith("https://"):
+            url = f"libsql://{url}"
+        return libsql.connect(url, auth_token=TURSO_AUTH_TOKEN)
     else:
         return sqlite3.connect(DB_PATH, timeout=30.0)
 
@@ -23,44 +28,27 @@ def init_db():
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    if IS_POSTGRES:
-        # PostgreSQL schema
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS movie_analysis (
-                id_title    TEXT PRIMARY KEY,
-                result_data TEXT,
-                created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS background_tasks (
-                task_id TEXT PRIMARY KEY,
-                task_data TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-    else:
-        # SQLite schema
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS movie_analysis (
-                id_title    TEXT PRIMARY KEY,
-                result_data TEXT,
-                created_at  TIMESTAMP
-            )
-        ''')
-        try:
-            cursor.execute("ALTER TABLE movie_analysis ADD COLUMN created_at TIMESTAMP")
-            cursor.execute("UPDATE movie_analysis SET created_at = datetime('now') WHERE created_at IS NULL")
-        except Exception:
-            pass
-            
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS background_tasks (
-                task_id TEXT PRIMARY KEY,
-                task_data TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
+    # SQLite / Turso schema
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS movie_analysis (
+            id_title    TEXT PRIMARY KEY,
+            result_data TEXT,
+            created_at  TIMESTAMP
+        )
+    ''')
+    try:
+        cursor.execute("ALTER TABLE movie_analysis ADD COLUMN created_at TIMESTAMP")
+        cursor.execute("UPDATE movie_analysis SET created_at = datetime('now') WHERE created_at IS NULL")
+    except Exception:
+        pass
+        
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS background_tasks (
+            task_id TEXT PRIMARY KEY,
+            task_data TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
         
     conn.commit()
     conn.close()
@@ -70,8 +58,7 @@ def get_task(task_id):
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    query = "SELECT task_data FROM background_tasks WHERE task_id = %s" if IS_POSTGRES else "SELECT task_data FROM background_tasks WHERE task_id = ?"
-    cursor.execute(query, (task_id,))
+    cursor.execute("SELECT task_data FROM background_tasks WHERE task_id = ?", (task_id,))
     row = cursor.fetchone()
     conn.close()
     
@@ -84,18 +71,11 @@ def set_task(task_id, task_data):
     cursor = conn.cursor()
     
     data_str = json.dumps(task_data)
-    if IS_POSTGRES:
-        query = '''
-            INSERT INTO background_tasks (task_id, task_data) 
-            VALUES (%s, %s) 
-            ON CONFLICT (task_id) DO UPDATE SET task_data = EXCLUDED.task_data
-        '''
-    else:
-        query = '''
-            INSERT INTO background_tasks (task_id, task_data) 
-            VALUES (?, ?) 
-            ON CONFLICT(task_id) DO UPDATE SET task_data = excluded.task_data
-        '''
+    query = '''
+        INSERT INTO background_tasks (task_id, task_data) 
+        VALUES (?, ?) 
+        ON CONFLICT(task_id) DO UPDATE SET task_data = excluded.task_data
+    '''
     
     cursor.execute(query, (task_id, data_str))
     conn.commit()
@@ -110,18 +90,10 @@ def save_movie_analysis(id_title, result_data_dict, created_at=None):
     cursor = conn.cursor()
     data_str = json.dumps(result_data_dict)
     
-    if IS_POSTGRES:
-        query = '''
-            INSERT INTO movie_analysis (id_title, result_data, created_at)
-            VALUES (%s, %s, %s)
-            ON CONFLICT (id_title) DO UPDATE 
-            SET result_data = EXCLUDED.result_data, created_at = EXCLUDED.created_at
-        '''
-    else:
-        query = '''
-            INSERT OR REPLACE INTO movie_analysis (id_title, result_data, created_at)
-            VALUES (?, ?, ?)
-        '''
+    query = '''
+        INSERT OR REPLACE INTO movie_analysis (id_title, result_data, created_at)
+        VALUES (?, ?, ?)
+    '''
         
     cursor.execute(query, (id_title, data_str, created_at))
     conn.commit()
@@ -131,8 +103,7 @@ def get_movie_analysis(id_title):
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    query = "SELECT result_data FROM movie_analysis WHERE id_title = %s" if IS_POSTGRES else "SELECT result_data FROM movie_analysis WHERE id_title = ?"
-    cursor.execute(query, (id_title,))
+    cursor.execute("SELECT result_data FROM movie_analysis WHERE id_title = ?", (id_title,))
     row = cursor.fetchone()
     conn.close()
     
@@ -160,7 +131,6 @@ def delete_movie_analysis(id_title):
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    query = "DELETE FROM movie_analysis WHERE id_title = %s" if IS_POSTGRES else "DELETE FROM movie_analysis WHERE id_title = ?"
-    cursor.execute(query, (id_title,))
+    cursor.execute("DELETE FROM movie_analysis WHERE id_title = ?", (id_title,))
     conn.commit()
     conn.close()
